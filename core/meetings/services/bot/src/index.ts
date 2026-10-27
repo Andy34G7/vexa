@@ -23,7 +23,8 @@
  * lazy redis connect.
  */
 import { createClient } from 'redis';
-import { loadInvocation, InvocationError, speakerStreamConfigFromEnv, type Invocation } from './config.js';
+import { isVideoRecording, loadInvocation, InvocationError, speakerStreamConfigFromEnv, type Invocation } from './config.js';
+import { VideoRecordingService } from '@vexa/recording';
 import type { Act, LifecycleEvent, TranscriptSegment } from './contracts.js';
 import { createOrchestrator } from './orchestrator.js';
 import { createHttpLifecycleSink } from './adapters/lifecycle-http.js';
@@ -288,7 +289,23 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
     // throwing into the orchestrator's leave-on-fail backstop (which would hang the bot up).
     pipeline = createLivePipeline({
       startCapture: () => startCaptureBridge(sess.page, inv, bp, signalRecorder?.sink, publishChat, remoteAudioActivity),   // on the live meeting page
-      startRecording: rec ? () => startRecording(sess.page, inv, rec) : undefined,          // MediaRecorder → recording.v1
+      startRecording: rec ? async () => {                                                    // MediaRecorder → recording.v1
+        const stopAudio = await startRecording(sess.page, inv, rec);
+        if (!isVideoRecording(inv, env)) return stopAudio;
+        // neu-meet patch: record the meeting as shown on the bot's display, upload it on stop as the
+        // recording's video media file (meeting-api already accepts media_type "video").
+        const video = new VideoRecordingService(inv.meeting_id ?? 0, inv.connectionId ?? '');
+        video.start();                                                                       // never throws: a missing ffmpeg is logged
+        return async () => {
+          await stopAudio();
+          await video.stop();                                                                // SIGTERM → webm finalized
+          if (inv.recordingUploadUrl) {
+            await video.upload(inv.recordingUploadUrl, inv.internalSecret ?? '')
+              .catch((e) => console.error(`[bot] video upload failed: ${serr(e)}`));
+          }
+          await video.cleanup();
+        };
+      } : undefined,
       engine: bp,
       onFault: (stage, e) => {
         console.error(`[bot] live-pipeline: ${stage} failed (non-fatal, bot stays seated): ${serr(e)}`);

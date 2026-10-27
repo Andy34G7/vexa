@@ -143,6 +143,13 @@ export function parseInvocation(raw: string | undefined): Invocation {
 }
 
 /** Boot helper — read VEXA_BOT_CONFIG from the environment and validate it (P7: config by env). */
+/** neu-meet patch: video = x11grab of the bot's Xvfb display, uploaded as a second media file of the
+ *  recording. On whenever recording is on and meeting-api asked for video (it always passes
+ *  capture_modes ["audio","video"] with recording); VEXA_VIDEO_RECORDING=0 turns it off. */
+export function isVideoRecording(inv: Invocation, env: NodeJS.ProcessEnv = process.env): boolean {
+  return !!inv.recordingEnabled && (inv.captureModes ?? []).includes('video') && env.VEXA_VIDEO_RECORDING !== '0';
+}
+
 export function loadInvocation(env: NodeJS.ProcessEnv = process.env): Invocation {
   return parseInvocation(env.VEXA_BOT_CONFIG);
 }

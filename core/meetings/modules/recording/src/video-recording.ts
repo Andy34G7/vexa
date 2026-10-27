@@ -327,6 +327,10 @@ export class VideoRecordingService {
         } else {
           // Software VP9 — excellent compression for screen content
           encoderArgs = [
+            // neu-meet patch: crop off Chromium's tab/address/infobar rows (top 120 px) and the desktop
+            // taskbar (bottom 24 px), so only the Meet page is recorded; then 1280 wide, which roughly
+            // halves the encode cost and the file size
+            '-vf', 'crop=iw:ih-144:0:120,scale=1280:-2',
             '-c:v', 'libvpx-vp9',
             '-pix_fmt', 'yuv420p', // VP9 profile 0 — required for Safari compatibility
             '-crf', '35',

@@ -115,6 +115,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     && apt-get install -y --no-install-recommends \
        pulseaudio \
        fluxbox \
+       ffmpeg \
        socat \
        ca-certificates \
        curl \
