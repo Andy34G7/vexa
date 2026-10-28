@@ -38,6 +38,7 @@ import {
 import { getJoinBrowserArgs } from '@vexa/join';
 import type { RecordingMasterFormat } from '@vexa/recording';
 import { isVideoRecording, isMixedLanePlatform, isPerTrackLanePlatform, type Invocation } from './config.js';
+import { logoBrowserArgs } from './neu-consent.js';
 import type { BotPipeline } from './pipeline.js';
 import type { BotRecordingSink } from './recording.js';
 import type { TelemetrySink } from './ports.js';
@@ -594,7 +595,9 @@ export async function launchBrowser(inv: Invocation): Promise<BrowserSession> {
   // join args win on conflict (later wins in Chromium arg parsing).
   const args = [...getAuthenticatedBrowserArgs(), ...getJoinBrowserArgs(),
     // neu-meet patch: fill the 1920x1080 display, so the video recording shows the meeting, not a small window
-    ...(isVideoRecording(inv) ? ['--start-maximized', '--window-size=1920,1080', '--window-position=0,0'] : [])];
+    ...(isVideoRecording(inv) ? ['--start-maximized', '--window-size=1920,1080', '--window-position=0,0'] : []),
+    // neu-meet patch: the camera shows the logo frame (see neu-consent.ts)
+    ...logoBrowserArgs(inv)];
   const { context, page } = await launchPersistentBrowser({ dataDir, args });
 
   // Voice-agent gate the page reads to decide whether to keep the mic hot (production parity).

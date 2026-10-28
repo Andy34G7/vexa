@@ -37,6 +37,7 @@ import { createCaptureSignalRecorder, startBotLogSidecar, wrapTranscribeWithTap,
 import { uploadSignalTapes } from './signal-upload.js';
 import { createSttFaultReporter } from './stt-faults.js';
 import { launchBrowser, startCaptureBridge, startRecording, restartMixedCapture, createSpeakController, type BrowserSession, type SpeakController } from './capture-bridge.js';
+import { consentMessage, dismissMeetPopups, postMeetChat } from './neu-consent.js';
 import { createRemoteAudioActivityTap, createSilenceAlonenessSource, resolveAloneSilenceWindowMs } from './aloneness.js';
 import { installSignalHandlers } from './signals.js';
 import type {
@@ -288,7 +289,15 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
     // each failure surfaces LOUD via onFault (console with a full-fidelity serr(e)) instead of
     // throwing into the orchestrator's leave-on-fail backstop (which would hang the bot up).
     pipeline = createLivePipeline({
-      startCapture: () => startCaptureBridge(sess.page, inv, bp, signalRecorder?.sink, publishChat, remoteAudioActivity),   // on the live meeting page
+      startCapture: () => {                                                                  // on the live meeting page
+        // neu-meet patch: tell everyone the call is recorded, once admitted; runs beside capture, never fails it
+        const notice = consentMessage(inv, env);
+        if (notice) void postMeetChat(sess.page, notice);
+        const stopTips = inv.platform === 'google_meet' ? dismissMeetPopups(sess.page) : () => {};
+        // stopped with capture, so nothing is clicked while the bot leaves
+        return startCaptureBridge(sess.page, inv, bp, signalRecorder?.sink, publishChat, remoteAudioActivity)
+          .then((stop) => async () => { stopTips(); await stop(); }, (e) => { stopTips(); throw e; });
+      },
       startRecording: rec ? async () => {                                                    // MediaRecorder → recording.v1
         const stopAudio = await startRecording(sess.page, inv, rec);
         if (!isVideoRecording(inv, env)) return stopAudio;

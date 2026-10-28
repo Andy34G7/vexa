@@ -156,6 +156,14 @@ COPY --from=builder /build /app
 # page navigation (the gmeet per-channel + mixed-lane capture wiring depends on it).
 COPY --from=builder /build/core/meetings/services/bot/dist/browser-utils.global.js /app/browser-utils.global.js
 
+# neu-meet patch: Neu Notetaker's camera frame (logo on black) and the silence its fake mic plays, plus
+# the consent notice it posts in the Meet chat (see src/neu-consent.ts). Empty either ENV to turn it off.
+COPY core/meetings/services/bot/assets/neu-logo.png /app/neu-logo.png
+RUN ffmpeg -v error -i /app/neu-logo.png -pix_fmt yuv420p -r 5 -frames:v 1 -f yuv4mpegpipe /app/neu-logo.y4m \
+ && ffmpeg -v error -f lavfi -i anullsrc=r=48000:cl=mono -t 1 /app/silence.wav
+ENV VEXA_BOT_LOGO_FILE=/app/neu-logo.y4m \
+    VEXA_CONSENT_MESSAGE="Neu Notetaker is recording this meeting. If you don't consent, please ask the organiser."
+
 # The baked HF model cache (mixed-lane pyannote segmentation), carried from the
 # builder. VEXA_HF_CACHE points the @huggingface/transformers env.cacheDir here
 # so the Zoom/Teams diarizer loads the model from disk with NO network at runtime.

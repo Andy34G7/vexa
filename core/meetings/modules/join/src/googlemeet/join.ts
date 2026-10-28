@@ -408,7 +408,9 @@ export async function joinGoogleMeeting(
       log("Microphone already muted or not found.");
     }
 
-    try {
+    // neu-meet patch: with a logo frame (VEXA_BOT_LOGO_FILE) the camera stays on, showing it. A looser check than
+    // logoBrowserArgs (which also wants the files): if they're missing there's no camera, so leaving it on is harmless
+    if (!process.env.VEXA_BOT_LOGO_FILE) try {
       const cameraHandle = await page.waitForSelector(googleCameraButtonSelectors[0], { timeout: 3000 });
       if (cameraHandle) { await clickHandle(cameraHandle, "camera"); log("Camera turned off."); }
     } catch (e) {
@@ -471,7 +473,9 @@ export async function joinGoogleMeeting(
       log("Microphone already muted or not found.");
     }
 
-    try {
+    // neu-meet patch: with a logo frame (VEXA_BOT_LOGO_FILE) the camera stays on, showing it. A looser check than
+    // logoBrowserArgs (which also wants the files): if they're missing there's no camera, so leaving it on is harmless
+    if (!process.env.VEXA_BOT_LOGO_FILE) try {
       const cameraHandle = await page.waitForSelector(googleCameraButtonSelectors[0], { timeout: 1000 });
       if (cameraHandle) await clickHandle(cameraHandle, "camera");
     } catch (e) {
