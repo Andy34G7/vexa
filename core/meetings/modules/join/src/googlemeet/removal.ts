@@ -5,6 +5,14 @@ import { googleRemovalIndicators } from "./selectors";
 // Function to check if bot has been removed from the meeting
 export async function checkForGoogleRemoval(page: Page): Promise<boolean> {
   try {
+    // neu-meet patch: when the call ends, Meet sends a signed-out guest off meet.google.com (to the
+    // Workspace product page), where none of the indicators below exist, so the bot stayed on that
+    // page recording it until the alone timeout. Off Meet while monitoring = the call is over.
+    const host = (() => { try { return new URL(page.url()).hostname; } catch { return ''; } })();
+    if (host && host !== 'meet.google.com') {
+      log(`🚨 Google Meet removal detected: the page left Meet (now on ${host})`);
+      return true;
+    }
     // Check for removal indicators
     for (const selector of googleRemovalIndicators) {
       try {

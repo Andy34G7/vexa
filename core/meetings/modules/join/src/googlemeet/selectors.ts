@@ -244,28 +244,20 @@ export const googleSpeakingIndicators: string[] = [
 
 // Google Meet removal/error state indicators
 export const googleRemovalIndicators: string[] = [
+  // neu-meet patch: exact text only. The unquoted text=… forms match anywhere on the page, and with the bot's
+  // consent notice in the chat, a reply like "call ended?" shown as a chat pop-up would end the recording.
+  // "Reconnecting" is gone too: Meet shows it during a brief network blip, not at the end of a call.
   // Meeting ended messages
   'text="Meeting ended"',
-  'text=Meeting ended',
   'text="Call ended"',
-  'text=Call ended',
   'text="You left the meeting"',
-  'text=You left the meeting',
 
   // Connection issues
   'text="Connection lost"',
-  'text=Connection lost',
   'text="Unable to connect"',
-  'text=Unable to connect',
-  'text="Reconnecting"',
-  'text=Reconnecting',
-  
-  // Generic error patterns
-  '[role="alert"]',
-  '[role="alertdialog"]',
-  '.error-message',
-  '.connection-error',
-  '.meeting-error'
+
+  // (the generic [role="alert"] / error-class catch-alls are gone, as upstream did for Teams in #600: with the
+  // bot's camera on, Meet shows more alerts, none of which mean the call is over)
 ];
 
 // Google Meet UI interaction selectors.
