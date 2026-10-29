@@ -20,6 +20,8 @@ function setPage(tiles: Tile[], text = '') {
     getAttribute: (a: string) => (a === 'data-participant-id' ? t.id : a === 'aria-label' ? t.label ?? 'Someone' : null),
     textContent: t.label ?? 'Someone',
     querySelector: (sel: string) => (sel === 'span.notranslate' && t.name ? { textContent: ` ${t.name} ` } : null),
+    // as live: several name spans, the name not in the first
+    querySelectorAll: (sel: string) => (sel === 'span.notranslate' ? [{ textContent: '' }, ...(t.name ? [{ textContent: ` ${t.name} ` }] : []), { textContent: '' }] : []),
   }));
   const selfIdx = tiles.findIndex((t) => t.self);
   (globalThis as any).document = {

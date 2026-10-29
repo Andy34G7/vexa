@@ -93,7 +93,8 @@ const CAMERA_TURN_ONS = 3;
  *  a breakout-room move). With keepCameraOn, also turns the bot's camera (the logo) back on when it finds it
  *  off. Returns a stop function. Never throws. */
 export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false, settleMs = 2_000,
-  retryMs = 5 * 60_000): () => void {
+  retryMs = 5 * 60_000, closeTips = true): () => void {
+  const seenTips = new Set<string>();  // with closeTips off: each tip logged once, not clicked
   let stopped = false;  // a sweep under way when the bot leaves clicks nothing more
   let busy = false;     // a slow sweep isn't overlapped by the next (two presses would turn it back off)
   let camera = '';      // last camera state seen, logged on change (how Meet behaves, e.g. on a host's video lock)
@@ -127,6 +128,13 @@ export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = f
     const tips = page.locator('[role="dialog"], [role="alertdialog"], [role="alert"], [role="status"]')
       .filter({ hasText: /see your video differently|camera might be blocked/i });
     // visible ones only, each on its own: one that can't be clicked mustn't block the rest every sweep
+    if (!closeTips) {
+      for (const text of await tips.allInnerTexts().catch(() => [] as string[])) {
+        const t = text.replace(/\s+/g, ' ').trim().slice(0, 160);
+        if (t && !seenTips.has(t)) { seenTips.add(t); console.log(`[bot] Meet camera tip shown (left open): ${t}`); }
+      }
+      return;
+    }
     const buttons = await tips.getByRole('button', { name: /^(got it|dismiss|close)$/i }).filter({ visible: true }).all();
     for (const b of buttons.slice(0, 5)) {
       if (stopped) return;

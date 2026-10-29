@@ -21,7 +21,9 @@ export function meetPresence(botName: string): MeetPresence {
   // the bot (its name in span.notranslate, as gmeet-speakers reads names). Two bots of the same name: the
   // other one's tile may be taken for ours, then ours counts as someone else, so neither leaves early.
   const tiles = Array.from(document.querySelectorAll("[data-participant-id]"));
-  const named = tiles.find((el) => !!botName && el.querySelector("span.notranslate")?.textContent?.trim() === botName);
+  // any of its name spans (seen live: the tile holds three, the bot's name in the second)
+  const named = tiles.find((el) => !!botName && Array.from(el.querySelectorAll("span.notranslate"))
+    .some((s) => s.textContent?.trim() === botName));
   const self = (document.querySelector("[data-self-name]")?.closest("[data-participant-id]") || named)
     ?.getAttribute("data-participant-id");
   if (!self) return "unknown: the bot's own tile isn't found";
