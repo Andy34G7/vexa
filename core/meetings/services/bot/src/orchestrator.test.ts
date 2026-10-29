@@ -250,6 +250,22 @@ async function main(): Promise<void> {
     check('aloneness: teardown stops the source', stopped === 1, `stops=${stopped}`);
   }
 
+  // ── neu-meet patch: everyone else left (join driver) → completed(left_alone), stopped on teardown ──
+  {
+    const lc = recordingSink();
+    let fireLeft: () => void = () => {};
+    let stopped = 0;
+    const join: JoinDriver = { ...mockJoin('admitted'), onEveryoneLeft(cb) { fireLeft = cb; return () => { stopped++; }; } };
+    const o = createOrchestrator(inv(), { lifecycle: lc, join, pipeline: noopPipeline(), acts: noopActs(), aloneness: noopAloneness() });
+    const runP = o.run();
+    setTimeout(() => { fireLeft(); fireLeft(); }, 5);
+    const res = await runP;
+    const terminals = lc.events.filter((event) => event.status === 'completed' || event.status === 'failed');
+    check('everyone-left: completed(left_alone)', res.status === 'completed' && res.completionReason === 'left_alone');
+    check('everyone-left: one terminal event', terminals.length === 1, JSON.stringify(terminals));
+    check('everyone-left: teardown stops the monitor', stopped === 1, `stops=${stopped}`);
+  }
+
   // ── a fake transcript.v1 segment routes through the pipeline → TranscriptSink ──
   {
     const published: TranscriptSegment[] = [];

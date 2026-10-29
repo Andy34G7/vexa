@@ -10,7 +10,7 @@ import {
   joinMeeting,
   AdmissionError,
   leaveGoogleMeet, leaveMicrosoftTeams, leaveZoomMeeting, leaveJitsiMeeting,
-  startGoogleRemovalMonitor, startTeamsRemovalMonitor, startZoomRemovalMonitor, startJitsiRemovalMonitor,
+  startGoogleRemovalMonitor, startGoogleEveryoneLeftMonitor, startTeamsRemovalMonitor, startZoomRemovalMonitor, startJitsiRemovalMonitor,
   type JoinState, type Platform as JoinPlatform, type AdmissionOutcome,
 } from '@vexa/join';
 import type { BotStatus } from './contracts.js';
@@ -94,6 +94,7 @@ export function createJoinTimer(now: () => number = Date.now) {
 
 export function createBrowserJoinDriver(
   page: Page, inv: Invocation, now: () => number = Date.now,
+  lastRemoteAudioAt?: () => number | undefined,  // neu-meet patch: the leave-when-everyone-left audio veto
 ): JoinDriver {
   const platform = joinPlatform(inv.platform);
   // The deadline the CONTROL PLANE issued for this run. A lobby wait is only an "expiry" relative
@@ -164,6 +165,12 @@ export function createBrowserJoinDriver(
       if (platform === 'zoom')  return startZoomRemovalMonitor(page, cb);
       if (platform === 'jitsi') return startJitsiRemovalMonitor(page, cb);
       return startGoogleRemovalMonitor(page, cb);
+    },
+    onEveryoneLeft(cb) {
+      if (platform !== 'google_meet') return () => {};
+      return startGoogleEveryoneLeftMonitor(page, cb, {
+        aloneMs: inv.automaticLeave?.everyoneLeftTimeout, lastHeardAt: lastRemoteAudioAt,
+      });
     },
     async leave(reason) {
       if (platform === 'teams') { await leaveMicrosoftTeams(page, undefined, reason); return; }

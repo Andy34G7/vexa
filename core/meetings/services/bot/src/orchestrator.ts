@@ -373,6 +373,8 @@ export function createOrchestrator(inv: Invocation, deps: OrchestratorDeps) {
     }
     const stopRemoval = deps.join.onRemoval(() => signalEnd?.('evicted'));
     const stopAloneness = deps.aloneness.onAlone(() => signalEnd?.('left_alone'));
+    // neu-meet patch: everyone else gone (Meet: only the bot's tile for 2 minutes), not just 10 minutes of silence
+    const stopEveryoneLeft = deps.join.onEveryoneLeft?.(() => signalEnd?.('left_alone')) ?? (() => {});
     const cap = opts.maxActiveMs && opts.maxActiveMs > 0
       ? setTimeout(() => signalEnd?.('max_bot_time_exceeded'), opts.maxActiveMs)
       : null;
@@ -383,6 +385,7 @@ export function createOrchestrator(inv: Invocation, deps: OrchestratorDeps) {
     if (cap) clearTimeout(cap);
     unsubscribe();
     stopAloneness();
+    stopEveryoneLeft();
     stopRemoval();
     await deps.pipeline.stop().catch(() => { /* best-effort */ });
     deps.recording?.close(recordingKey);

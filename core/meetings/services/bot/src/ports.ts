@@ -69,6 +69,9 @@ export interface JoinDriver {
   join(report: (s: BotStatus) => void | Promise<void>): Promise<JoinOutcome | JoinResult>;
   /** Watch for being removed from the meeting while active; returns a stop fn. */
   onRemoval(cb: () => void): () => void;
+  /** neu-meet patch: watch for everyone else leaving while active (Google Meet only); returns a stop fn.
+   *  OPTIONAL — a driver without it leaves on the silence rule alone. */
+  onEveryoneLeft?(cb: () => void): () => void;
   /** Leave the meeting (best-effort; never throws fatally). */
   leave(reason: string): Promise<void>;
   /** Withdraw a PENDING join request from the waiting room / pre-join screen (Bug 2): cancel the

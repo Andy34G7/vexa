@@ -235,7 +235,7 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
 
   try {
     session = await launchBrowser(inv);                                   // L4 (O6/VM)
-    join = createBrowserJoinDriver(session.page, inv);
+    join = createBrowserJoinDriver(session.page, inv, Date.now, () => remoteAudioActivity.snapshot().lastRemoteAudioAt);
     botPipeline = createBotPipeline(inv, transcript, {
       // When recording, tee every STT round-trip to <session>.stt.jsonl (the capture/STT/assembly bisect).
       transcribe: signalRecorder ? wrapTranscribeWithTap(createTranscribe(inv), signalRecorder.path) : undefined,
