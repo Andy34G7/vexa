@@ -169,7 +169,7 @@ export function createBrowserJoinDriver(
     onEveryoneLeft(cb) {
       if (platform !== 'google_meet') return () => {};
       return startGoogleEveryoneLeftMonitor(page, cb, {
-        aloneMs: inv.automaticLeave?.everyoneLeftTimeout, lastHeardAt: lastRemoteAudioAt,
+        aloneMs: inv.automaticLeave?.everyoneLeftTimeout, lastHeardAt: lastRemoteAudioAt, botName: inv.botName,
       });
     },
     async leave(reason) {

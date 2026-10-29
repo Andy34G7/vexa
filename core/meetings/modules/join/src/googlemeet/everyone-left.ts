@@ -13,19 +13,24 @@ export const EVERYONE_LEFT_MS = 2 * 60 * 1000;
 export type MeetPresence = "alone" | "others" | `unknown: ${string}`;
 
 /** Runs in the Meet page (self-contained: Playwright sends its source). "alone" when the bot's own tile is
- *  on the page and no other participant tile is. Unknown: the bot's tile not found or not marked yet, or
- *  anything about breakout rooms on the page (the main room empties while people are in their rooms). */
-export function meetPresence(): MeetPresence {
+ *  on the page and no other participant tile is. Unknown: the bot's tile not found, or anything about
+ *  breakout rooms on the page (the main room empties while people are in their rooms). */
+export function meetPresence(botName: string): MeetPresence {
   if (/breakout/i.test(document.body?.innerText || "")) return "unknown: breakout rooms";
-  const self = document.querySelector("[data-self-name]")?.closest("[data-participant-id]")
+  // the bot's tile: Meet's self marker if any (a signed-out guest has none, seen live), else the tile named as
+  // the bot (its name in span.notranslate, as gmeet-speakers reads names). Two bots of the same name: the
+  // other one's tile may be taken for ours, then ours counts as someone else, so neither leaves early.
+  const tiles = Array.from(document.querySelectorAll("[data-participant-id]"));
+  const named = tiles.find((el) => !!botName && el.querySelector("span.notranslate")?.textContent?.trim() === botName);
+  const self = (document.querySelector("[data-self-name]")?.closest("[data-participant-id]") || named)
     ?.getAttribute("data-participant-id");
-  if (!self) return "unknown: the bot's own tile isn't marked";
+  if (!self) return "unknown: the bot's own tile isn't found";
   // Meet gives the "Backgrounds and effects" preview its own participant id, its label leading with the
   // effects icon (admission.ts). The bot's own tile holds an effects button too, so it's known by its id,
   // and only other tiles are filtered (seen live: an unanchored filter dropped the bot's own tile).
   const effects = /^(visual_effects|backgrounds and effects)/i;
   let others = 0;
-  document.querySelectorAll("[data-participant-id]").forEach((el) => {
+  tiles.forEach((el) => {
     const id = el.getAttribute("data-participant-id");
     const label = (el.getAttribute("aria-label") || el.textContent || "").trim();
     if (id && id !== self && !effects.test(label)) others++;
@@ -36,7 +41,7 @@ export function meetPresence(): MeetPresence {
 export function startGoogleEveryoneLeftMonitor(
   page: Page,
   onEveryoneLeft: () => void | Promise<void>,
-  opts: { aloneMs?: number; pollMs?: number; lastHeardAt?: () => number | undefined } = {},
+  opts: { aloneMs?: number; pollMs?: number; lastHeardAt?: () => number | undefined; botName?: string } = {},
 ): () => void {
   const aloneMs = opts.aloneMs ?? EVERYONE_LEFT_MS;
   let seenOther = false;  // a bot that's early, before anyone joins, isn't "left alone" (Vexa's own rule covers that)
@@ -48,7 +53,7 @@ export function startGoogleEveryoneLeftMonitor(
     if (done || busy) return;
     busy = true;
     let state: MeetPresence = "unknown: page error";
-    try { state = await page.evaluate(meetPresence); } catch { /* page closing: don't know */ }
+    try { state = await page.evaluate(meetPresence, opts.botName ?? ""); } catch { /* page closing: don't know */ }
     busy = false;
     if (done) return;
     if (state !== last) log(`everyone-left: ${state}${seenOther ? "" : " (nobody else seen yet)"}`);

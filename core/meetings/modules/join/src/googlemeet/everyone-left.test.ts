@@ -12,12 +12,14 @@ const check = (name: string, cond: boolean) => {
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type Tile = { id: string; label?: string; self?: boolean };
-/** A Meet page with these participant tiles (a tile with self carries the data-self-name marker). */
+type Tile = { id: string; label?: string; name?: string; self?: boolean };
+/** A Meet page with these participant tiles (name: the span.notranslate text; self: the data-self-name marker,
+ *  which a signed-out guest bot doesn't get). */
 function setPage(tiles: Tile[], text = '') {
   const els = tiles.map((t) => ({
     getAttribute: (a: string) => (a === 'data-participant-id' ? t.id : a === 'aria-label' ? t.label ?? 'Someone' : null),
     textContent: t.label ?? 'Someone',
+    querySelector: (sel: string) => (sel === 'span.notranslate' && t.name ? { textContent: ` ${t.name} ` } : null),
   }));
   const selfIdx = tiles.findIndex((t) => t.self);
   (globalThis as any).document = {
@@ -27,20 +29,25 @@ function setPage(tiles: Tile[], text = '') {
       ? { closest: (c: string) => (c === '[data-participant-id]' ? els[selfIdx] : null) } : null),
   };
 }
-const BOT: Tile = { id: 'b', label: 'Neu Notetaker', self: true };
+const NAME = 'Neu Notetaker';
+const BOT: Tile = { id: 'b', label: NAME, name: NAME };  // as live: named, not marked
+const presence = () => meetPresence(NAME);
 const ANA: Tile = { id: 'a', label: 'Ana' };
 const EFFECTS: Tile = { id: 'fx', label: 'visual_effects Backgrounds and effects' };
 
-setPage([BOT, ANA]); check('page: someone else -> others', meetPresence() === 'others');
-setPage([BOT]); check('page: only the bot -> alone', meetPresence() === 'alone');
-setPage([BOT, EFFECTS]); check('page: the effects preview is not a person', meetPresence() === 'alone');
-setPage([BOT, { ...BOT, self: false }]); check('page: a nested duplicate of the bot tile is still alone', meetPresence() === 'alone');
+setPage([BOT, ANA]); check('page: someone else -> others', presence() === 'others');
+setPage([BOT]); check('page: only the bot -> alone', presence() === 'alone');
+setPage([BOT, EFFECTS]); check('page: the effects preview is not a person', presence() === 'alone');
+setPage([BOT, { ...BOT, name: undefined }]); check('page: a nested duplicate of the bot tile is still alone', presence() === 'alone');
 setPage([{ ...BOT, label: 'visual_effects frame_person more_vert Neu Notetaker' }]);
-check('page: the bot tile holding an effects button is still the bot (seen live)', meetPresence() === 'alone');
-setPage([BOT, { id: 'fx2', label: 'Apply visual effects' }]); check('page: an unrecognised effects label counts as someone (never leaves)', meetPresence() === 'others');
-setPage([]); check('page: no tiles -> unknown', meetPresence().startsWith('unknown'));
-setPage([{ ...BOT, self: false }, ANA]); check('page: bot tile not marked yet -> unknown', meetPresence().startsWith('unknown'));
-setPage([BOT], 'Breakout rooms are open'); check('page: breakout rooms -> unknown', meetPresence().startsWith('unknown'));
+check('page: the bot tile holding an effects button is still the bot (seen live)', presence() === 'alone');
+setPage([BOT, { id: 'fx2', label: 'Apply visual effects' }]); check('page: an unrecognised effects label counts as someone (never leaves)', presence() === 'others');
+setPage([]); check('page: no tiles -> unknown', presence().startsWith('unknown'));
+setPage([{ ...BOT, name: undefined }, ANA]); check('page: bot tile not found -> unknown', presence().startsWith('unknown'));
+setPage([{ id: 'b', label: 'x', self: true }]); check("page: Meet's self marker works too", presence() === 'alone');
+setPage([BOT]); check('page: no bot name given -> unknown', meetPresence('').startsWith('unknown'));
+setPage([BOT, { id: 'b2', name: NAME }]); check('page: two bots of the same name -> others (neither leaves early)', presence() === 'others');
+setPage([BOT], 'Breakout rooms are open'); check('page: breakout rooms -> unknown', presence().startsWith('unknown'));
 
 /** The monitor over a page whose presence the test sets; heardAt is the last remote audio. */
 async function run(states: string[], stepMs: number, heardAt?: () => number | undefined) {
