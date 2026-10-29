@@ -69,11 +69,9 @@ void (async () => {
   // camera tips: a button that can't be clicked doesn't block the others; stopping ends the sweeps
   const clicks: string[] = [];
   const btn = (name: string, stuck = false) => ({ click: async () => (stuck ? Promise.reject(new Error('covered')) : void clicks.push(name)) });
-  const camera = { off: true };
   const tipsPage = {
-    locator: (sel: string) => (sel.includes('Turn on camera')
-      ? { filter: () => ({ count: async () => (camera.off ? 1 : 0), first: () => ({ click: async () => { clicks.push('camera'); camera.off = false; } }) }) }
-      : { filter: () => ({ getByRole: () => ({ filter: () => ({ all: async () => [btn('stuck', true), btn('got it')] }) }) }) }),
+    locator: () => ({ filter: () => ({ getByRole: () => ({ filter: () => ({ all: async () => [btn('stuck', true), btn('got it')] }) }) }) }),
+    evaluate: async () => { clicks.push('camera?'); return 'on'; },
   } as unknown as Page;
   const stop = dismissMeetPopups(tipsPage, 20);
   await new Promise((r) => setTimeout(r, 70));
@@ -82,12 +80,46 @@ void (async () => {
   await new Promise((r) => setTimeout(r, 60));
   check("tips: a stuck button doesn't block the next one", n >= 2 && clicks.every((c) => c === 'got it'), JSON.stringify(clicks));
   check('tips: no clicks after stop', clicks.length === n, `${n} -> ${clicks.length}`);
-  check('camera: left alone unless the logo is on', !clicks.includes('camera'));
-  clicks.length = 0;
-  const stopCam = dismissMeetPopups(tipsPage, 20, true);
-  await new Promise((r) => setTimeout(r, 70));
-  stopCam();
-  check('camera: turned back on once when found off', clicks.filter((c) => c === 'camera').length === 1, JSON.stringify(clicks));
+  check('camera: not even read unless the logo is on', !clicks.includes('camera?'));
+
+  // the camera: a page whose button the test drives; evaluate(meetCamera, click) answers like the real one
+  const cam = (start: string, takes = true) => {
+    const st = { state: start, presses: 0 };
+    const page = {
+      locator: () => ({ filter: () => ({ getByRole: () => ({ filter: () => ({ all: async () => [] }) }) }) }),
+      evaluate: async (_fn: unknown, click: boolean) => {
+        if (click && st.state === 'off') { st.presses++; if (takes) st.state = 'on'; }
+        return st.state;
+      },
+      waitForTimeout: async () => {},
+    } as unknown as Page;
+    return { st, page };
+  };
+  const run = async (c: ReturnType<typeof cam>, ms: number, during?: () => void) => {
+    const stopCam = dismissMeetPopups(c.page, 10, true, 0);
+    await new Promise((r) => setTimeout(r, ms / 2)); during?.(); await new Promise((r) => setTimeout(r, ms / 2));
+    stopCam();
+  };
+  let c = cam('off');
+  await run(c, 80);
+  check('camera: found off, turned back on once', c.st.presses === 1 && c.st.state === 'on', JSON.stringify(c.st));
+  c = cam('locked');
+  await run(c, 80);
+  check('camera: blocked by the host, left alone', c.st.presses === 0, JSON.stringify(c.st));
+  c = cam('off', false);
+  await run(c, 150);
+  check("camera: a click that doesn't take is tried 3 times, then left", c.st.presses === 3, JSON.stringify(c.st));
+  c = cam('off');
+  const offAgain = setInterval(() => { c.st.state = 'off'; }, 15);
+  await run(c, 300);
+  clearInterval(offAgain);
+  check('camera: someone who keeps turning it off wins after 3', c.st.presses === 3, JSON.stringify(c.st));
+  c = cam('on');
+  await run(c, 40);
+  const before = c.st.presses;
+  c.st.state = 'off';
+  await new Promise((r) => setTimeout(r, 40));
+  check('camera: nothing pressed after stop', c.st.presses === before, JSON.stringify(c.st));
 
   if (failed) { console.error(`\n${failed} check(s) failed`); process.exit(1); }
   console.log('\nneu-consent: all checks passed');

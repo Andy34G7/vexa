@@ -50,8 +50,9 @@ export function meetTilesDebug(): string {
     text: (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
   }));
   const labels = Array.from(document.querySelectorAll("[aria-label]")).map((e) => e.getAttribute("aria-label") || "")
-    .filter((l) => /people|participant|everyone|only one|you're the/i.test(l)).slice(0, 8);
-  const selfNames = Array.from(document.querySelectorAll("[data-self-name]")).map((e) => e.getAttribute("data-self-name")).slice(0, 3);
+    .filter((l) => /people|participant|everyone|only one|you're the/i.test(l)).slice(0, 8).map((l) => l.slice(0, 60));
+  const selfNames = Array.from(document.querySelectorAll("[data-self-name]"))
+    .map((e) => (e.getAttribute("data-self-name") || "").slice(0, 30)).slice(0, 3);
   return JSON.stringify({ tiles, labels, selfNames });
 }
 

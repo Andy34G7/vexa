@@ -72,25 +72,53 @@ export async function postMeetChat(page: Page, text: string, tries = 3): Promise
  *  what the video records: "Others may see your video differently" and "Camera might be blocked" (the dark
  *  logo frame looks covered to Meet). Only those: a Close elsewhere can mean "no" (a recording consent notice,
  *  a breakout-room move). Returns a stop function. Never throws. */
-export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false): () => void {
+/** Runs in the Meet page: the bot's camera button, read (and with click, pressed) through the DOM. Meet hides
+ *  the toolbar while the pointer is idle, so it's never "visible" mid-call, and a DOM click moves no pointer
+ *  (no toolbar or tooltip on the recording). Locked: the host has blocked video. */
+export function meetCamera(click: boolean): 'on' | 'off' | 'locked' | 'none' {
+  const b = document.querySelector('button[aria-label*="Turn on camera"], button[aria-label*="Turn off camera"]') as HTMLButtonElement | null;
+  if (!b) return 'none';
+  if (/turn off camera/i.test(b.getAttribute('aria-label') || '')) return 'on';
+  if (b.disabled || b.getAttribute('aria-disabled') === 'true') return 'locked';
+  if (click) b.click();
+  return 'off';
+}
+
+/** At most this many times a call the bot turns its camera back on (someone who keeps turning it off wins),
+ *  and it gives up after this many tries in a row that didn't take (a broken fake camera). */
+const CAMERA_TURN_ONS = 3;
+
+export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false, settleMs = 2_000): () => void {
+  let stopped = false;  // a sweep under way when the bot leaves clicks nothing more
+  let camera = '';      // last camera state seen, logged on change (how Meet behaves, e.g. on a host's video lock)
+  let turnedOn = 0;
+  let failed = 0;
   const sweep = async () => {
-    // the logo tile: Meet turns the bot's camera off when the host blocks video, and doesn't turn it back
-    // on when video is allowed again, so the tile fell back to a letter avatar. A host-disabled button stays alone.
-    if (keepCameraOn) {
-      const off = page.locator('button[aria-label*="Turn on camera"]:not([disabled]):not([aria-disabled="true"])')
-        .filter({ visible: true });
-      if (await off.count()) {
-        await off.first().click({ timeout: 2_000 }).then(() => console.log('[bot] turned its camera (the logo) back on')).catch(() => {});
+    // the logo tile: Meet turns the bot's camera off when the host blocks video, and doesn't turn it back on
+    // when video is allowed again, so the tile fell back to a letter avatar. A locked button is left alone.
+    if (keepCameraOn && turnedOn < CAMERA_TURN_ONS && failed < CAMERA_TURN_ONS) {
+      const now = await page.evaluate(meetCamera, false);
+      if (now !== camera) console.log(`[bot] camera: ${now}`);
+      camera = now;
+      if (now === 'off' && !stopped) {
+        await page.evaluate(meetCamera, true);
+        await page.waitForTimeout(settleMs);
+        camera = await page.evaluate(meetCamera, false);
+        if (camera === 'on') console.log(`[bot] turned its camera (the logo) back on (${++turnedOn}/${CAMERA_TURN_ONS})`);
+        else if (++failed === CAMERA_TURN_ONS) console.log(`[bot] camera: ${failed} tries didn't turn it on; leaving it ${camera}`);
+        if (camera === 'on') failed = 0;
       }
     }
+    if (stopped) return;
     const tips = page.locator('[role="dialog"], [role="alertdialog"], [role="alert"], [role="status"]')
       .filter({ hasText: /see your video differently|camera might be blocked/i });
     // visible ones only, each on its own: one that can't be clicked mustn't block the rest every sweep
     const buttons = await tips.getByRole('button', { name: /^(got it|dismiss|close)$/i }).filter({ visible: true }).all();
     for (const b of buttons.slice(0, 5)) {
+      if (stopped) return;
       await b.click({ timeout: 2_000 }).then(() => console.log('[bot] closed a Meet camera tip')).catch(() => {});
     }
   };
   const timer = setInterval(() => { sweep().catch(() => {}); }, everyMs);
-  return () => clearInterval(timer);
+  return () => { stopped = true; clearInterval(timer); };
 }
