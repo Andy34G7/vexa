@@ -76,7 +76,10 @@ export async function postMeetChat(page: Page, text: string, tries = 3): Promise
  *  the toolbar while the pointer is idle, so it's never "visible" mid-call, and a DOM click moves no pointer
  *  (no toolbar or tooltip on the recording). Locked: the host has blocked video. */
 export function meetCamera(click: boolean): 'on' | 'off' | 'locked' | 'none' {
-  const b = document.querySelector('button[aria-label*="Turn on camera"], button[aria-label*="Turn off camera"]') as HTMLButtonElement | null;
+  // the bot package has no DOM lib: the page's document, typed as much as used here
+  type Button = { disabled?: boolean; getAttribute(name: string): string | null; click(): void };
+  const doc = (globalThis as unknown as { document: { querySelector(sel: string): Button | null } }).document;
+  const b = doc.querySelector('button[aria-label*="Turn on camera"], button[aria-label*="Turn off camera"]');
   if (!b) return 'none';
   if (/turn off camera/i.test(b.getAttribute('aria-label') || '')) return 'on';
   if (b.disabled || b.getAttribute('aria-disabled') === 'true') return 'locked';
