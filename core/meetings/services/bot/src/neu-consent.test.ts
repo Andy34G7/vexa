@@ -83,20 +83,22 @@ void (async () => {
   check('camera: not even read unless the logo is on', !clicks.includes('camera?'));
 
   // the camera: a page whose button the test drives; evaluate(meetCamera, click) answers like the real one
-  const cam = (start: string, takes = true) => {
-    const st = { state: start, presses: 0 };
+  // takes: a press turns it on; slow: it shows "on" only from the read after next (past the settle)
+  const cam = (start: string, takes = true, slow = false) => {
+    const st = { state: start, presses: 0, takes, pending: 0 };
     const page = {
       locator: () => ({ filter: () => ({ getByRole: () => ({ filter: () => ({ all: async () => [] }) }) }) }),
       evaluate: async (_fn: unknown, click: boolean) => {
-        if (click && st.state === 'off') { st.presses++; if (takes) st.state = 'on'; }
+        if (st.pending && --st.pending === 0) st.state = 'on';
+        if (click && st.state === 'off') { st.presses++; if (st.takes) slow ? (st.pending = 2) : (st.state = 'on'); }
         return st.state;
       },
       waitForTimeout: async () => {},
     } as unknown as Page;
     return { st, page };
   };
-  const run = async (c: ReturnType<typeof cam>, ms: number, during?: () => void) => {
-    const stopCam = dismissMeetPopups(c.page, 10, true, 0);
+  const run = async (c: ReturnType<typeof cam>, ms: number, during?: () => void, retryMs?: number) => {
+    const stopCam = dismissMeetPopups(c.page, 10, true, 0, retryMs);
     await new Promise((r) => setTimeout(r, ms / 2)); during?.(); await new Promise((r) => setTimeout(r, ms / 2));
     stopCam();
   };
@@ -114,6 +116,16 @@ void (async () => {
   await run(c, 300);
   clearInterval(offAgain);
   check('camera: someone who keeps turning it off wins after 3', c.st.presses === 3, JSON.stringify(c.st));
+  c = cam('off', true, true);
+  await run(c, 120);
+  check('camera: a turn-on slower than the settle still counts, no extra presses', c.st.presses === 1 && c.st.state === 'on', JSON.stringify(c.st));
+  c = cam('off', false);
+  await run(c, 200, () => { c.st.state = 'locked'; setTimeout(() => { c.st.state = 'off'; c.st.takes = true; }, 30); });
+  check('camera: failures, then a host lock and unlock: turned on again', c.st.state === 'on', JSON.stringify(c.st));
+  c = cam('off', false);
+  await run(c, 240, () => { c.st.takes = true; }, 40);
+  // 3 quick presses, then one per 40 ms (every 10 ms would be ~12)
+  check('camera: after 3 failed presses it keeps trying, slowly', c.st.state === 'on' && c.st.presses >= 4 && c.st.presses <= 7, JSON.stringify(c.st));
   c = cam('on');
   await run(c, 40);
   const before = c.st.presses;

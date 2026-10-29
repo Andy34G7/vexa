@@ -68,10 +68,6 @@ export async function postMeetChat(page: Page, text: string, tries = 3): Promise
   return posted;
 }
 
-/** Every 15 s for the whole call, closes the two Meet tips the camera brings up on the bot's screen, which is
- *  what the video records: "Others may see your video differently" and "Camera might be blocked" (the dark
- *  logo frame looks covered to Meet). Only those: a Close elsewhere can mean "no" (a recording consent notice,
- *  a breakout-room move). Returns a stop function. Never throws. */
 /** Runs in the Meet page: the bot's camera button, read (and with click, pressed) through the DOM. Meet hides
  *  the toolbar while the pointer is idle, so it's never "visible" mid-call, and a DOM click moves no pointer
  *  (no toolbar or tooltip on the recording). Locked: the host has blocked video. */
@@ -87,29 +83,44 @@ export function meetCamera(click: boolean): 'on' | 'off' | 'locked' | 'none' {
   return 'off';
 }
 
-/** At most this many times a call the bot turns its camera back on (someone who keeps turning it off wins),
- *  and it gives up after this many tries in a row that didn't take (a broken fake camera). */
+/** At most this many times a call the bot turns its camera back on (someone who keeps turning it off wins);
+ *  after this many presses in a row that don't take, it only tries again every retryMs. */
 const CAMERA_TURN_ONS = 3;
 
-export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false, settleMs = 2_000): () => void {
+/** Every 15 s for the whole call, closes the two Meet tips the camera brings up on the bot's screen, which is
+ *  what the video records: "Others may see your video differently" and "Camera might be blocked" (the dark
+ *  logo frame looks covered to Meet). Only those: a Close elsewhere can mean "no" (a recording consent notice,
+ *  a breakout-room move). With keepCameraOn, also turns the bot's camera (the logo) back on when it finds it
+ *  off. Returns a stop function. Never throws. */
+export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false, settleMs = 2_000,
+  retryMs = 5 * 60_000): () => void {
   let stopped = false;  // a sweep under way when the bot leaves clicks nothing more
+  let busy = false;     // a slow sweep isn't overlapped by the next (two presses would turn it back off)
   let camera = '';      // last camera state seen, logged on change (how Meet behaves, e.g. on a host's video lock)
   let turnedOn = 0;
   let failed = 0;
+  let retryAt = 0;
   const sweep = async () => {
     // the logo tile: Meet turns the bot's camera off when the host blocks video, and doesn't turn it back on
     // when video is allowed again, so the tile fell back to a letter avatar. A locked button is left alone.
-    if (keepCameraOn && turnedOn < CAMERA_TURN_ONS && failed < CAMERA_TURN_ONS) {
+    if (keepCameraOn && turnedOn < CAMERA_TURN_ONS) {
       const now = await page.evaluate(meetCamera, false);
       if (now !== camera) console.log(`[bot] camera: ${now}`);
       camera = now;
-      if (now === 'off' && !stopped) {
+      // on, locked or gone: the next "off" gets fresh tries (a turn-on that only took longer counts as one)
+      if (now !== 'off') failed = 0;
+      // a host lock that leaves the button enabled reads "off" too, so after the failures it keeps trying, slowly
+      else if (!stopped && (failed < CAMERA_TURN_ONS || Date.now() >= retryAt)) {
         await page.evaluate(meetCamera, true);
         await page.waitForTimeout(settleMs);
         camera = await page.evaluate(meetCamera, false);
-        if (camera === 'on') console.log(`[bot] turned its camera (the logo) back on (${++turnedOn}/${CAMERA_TURN_ONS})`);
-        else if (++failed === CAMERA_TURN_ONS) console.log(`[bot] camera: ${failed} tries didn't turn it on; leaving it ${camera}`);
-        if (camera === 'on') failed = 0;
+        if (camera === 'on') {
+          failed = 0;
+          console.log(`[bot] turned its camera (the logo) back on (${++turnedOn}/${CAMERA_TURN_ONS})`);
+        } else if (++failed >= CAMERA_TURN_ONS) {
+          retryAt = Date.now() + retryMs;
+          if (failed === CAMERA_TURN_ONS) console.log(`[bot] camera: ${failed} presses didn't turn it on; trying every ${retryMs / 60_000} min`);
+        }
       }
     }
     if (stopped) return;
@@ -122,6 +133,10 @@ export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = f
       await b.click({ timeout: 2_000 }).then(() => console.log('[bot] closed a Meet camera tip')).catch(() => {});
     }
   };
-  const timer = setInterval(() => { sweep().catch(() => {}); }, everyMs);
+  const timer = setInterval(() => {
+    if (busy) return;
+    busy = true;
+    sweep().catch(() => {}).finally(() => { busy = false; });
+  }, everyMs);
   return () => { stopped = true; clearInterval(timer); };
 }
