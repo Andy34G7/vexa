@@ -38,6 +38,23 @@ export function meetPresence(botName: string): MeetPresence {
   return others ? "others" : "alone";
 }
 
+/** Runs in the Meet page: what the participant tiles hold, for the log while the check can't tell (names
+ *  shortened; ids cut to their tail). */
+export function meetTilesDebug(): string {
+  const tiles = Array.from(document.querySelectorAll("[data-participant-id]")).slice(0, 12).map((el) => ({
+    id: (el.getAttribute("data-participant-id") || "").slice(-10),
+    aria: (el.getAttribute("aria-label") || "").slice(0, 60),
+    names: Array.from(el.querySelectorAll("span.notranslate")).map((s) => (s.textContent || "").trim().slice(0, 30)).slice(0, 3),
+    marked: !!el.querySelector("[data-self-name]"),
+    nested: el.querySelectorAll("[data-participant-id]").length,
+    text: (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
+  }));
+  const labels = Array.from(document.querySelectorAll("[aria-label]")).map((e) => e.getAttribute("aria-label") || "")
+    .filter((l) => /people|participant|everyone|only one|you're the/i.test(l)).slice(0, 8);
+  const selfNames = Array.from(document.querySelectorAll("[data-self-name]")).map((e) => e.getAttribute("data-self-name")).slice(0, 3);
+  return JSON.stringify({ tiles, labels, selfNames });
+}
+
 export function startGoogleEveryoneLeftMonitor(
   page: Page,
   onEveryoneLeft: () => void | Promise<void>,
@@ -49,6 +66,7 @@ export function startGoogleEveryoneLeftMonitor(
   let busy = false;
   let done = false;
   let last: MeetPresence | null = null;  // logged on change
+  let dumpedAt = 0;
   const timer = setInterval(async () => {
     if (done || busy) return;
     busy = true;
@@ -58,6 +76,10 @@ export function startGoogleEveryoneLeftMonitor(
     if (done) return;
     if (state !== last) log(`everyone-left: ${state}${seenOther ? "" : " (nobody else seen yet)"}`);
     last = state;
+    if (state.startsWith("unknown") && Date.now() - dumpedAt > 60_000) {  // ponytail: diagnostic, drop once the DOM is known
+      dumpedAt = Date.now();
+      try { log(`everyone-left tiles: ${await page.evaluate(meetTilesDebug)}`); } catch { /* page closing */ }
+    }
     if (state === "others") seenOther = true;
     if (state !== "alone" || !seenOther) { since = null; return; }
     const now = Date.now();

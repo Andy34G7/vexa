@@ -72,8 +72,17 @@ export async function postMeetChat(page: Page, text: string, tries = 3): Promise
  *  what the video records: "Others may see your video differently" and "Camera might be blocked" (the dark
  *  logo frame looks covered to Meet). Only those: a Close elsewhere can mean "no" (a recording consent notice,
  *  a breakout-room move). Returns a stop function. Never throws. */
-export function dismissMeetPopups(page: Page, everyMs = 15_000): () => void {
+export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false): () => void {
   const sweep = async () => {
+    // the logo tile: Meet turns the bot's camera off when the host blocks video, and doesn't turn it back
+    // on when video is allowed again, so the tile fell back to a letter avatar. A host-disabled button stays alone.
+    if (keepCameraOn) {
+      const off = page.locator('button[aria-label*="Turn on camera"]:not([disabled]):not([aria-disabled="true"])')
+        .filter({ visible: true });
+      if (await off.count()) {
+        await off.first().click({ timeout: 2_000 }).then(() => console.log('[bot] turned its camera (the logo) back on')).catch(() => {});
+      }
+    }
     const tips = page.locator('[role="dialog"], [role="alertdialog"], [role="alert"], [role="status"]')
       .filter({ hasText: /see your video differently|camera might be blocked/i });
     // visible ones only, each on its own: one that can't be clicked mustn't block the rest every sweep

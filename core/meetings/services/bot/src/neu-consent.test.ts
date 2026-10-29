@@ -69,8 +69,11 @@ void (async () => {
   // camera tips: a button that can't be clicked doesn't block the others; stopping ends the sweeps
   const clicks: string[] = [];
   const btn = (name: string, stuck = false) => ({ click: async () => (stuck ? Promise.reject(new Error('covered')) : void clicks.push(name)) });
+  const camera = { off: true };
   const tipsPage = {
-    locator: () => ({ filter: () => ({ getByRole: () => ({ filter: () => ({ all: async () => [btn('stuck', true), btn('got it')] }) }) }) }),
+    locator: (sel: string) => (sel.includes('Turn on camera')
+      ? { filter: () => ({ count: async () => (camera.off ? 1 : 0), first: () => ({ click: async () => { clicks.push('camera'); camera.off = false; } }) }) }
+      : { filter: () => ({ getByRole: () => ({ filter: () => ({ all: async () => [btn('stuck', true), btn('got it')] }) }) }) }),
   } as unknown as Page;
   const stop = dismissMeetPopups(tipsPage, 20);
   await new Promise((r) => setTimeout(r, 70));
@@ -79,6 +82,12 @@ void (async () => {
   await new Promise((r) => setTimeout(r, 60));
   check("tips: a stuck button doesn't block the next one", n >= 2 && clicks.every((c) => c === 'got it'), JSON.stringify(clicks));
   check('tips: no clicks after stop', clicks.length === n, `${n} -> ${clicks.length}`);
+  check('camera: left alone unless the logo is on', !clicks.includes('camera'));
+  clicks.length = 0;
+  const stopCam = dismissMeetPopups(tipsPage, 20, true);
+  await new Promise((r) => setTimeout(r, 70));
+  stopCam();
+  check('camera: turned back on once when found off', clicks.filter((c) => c === 'camera').length === 1, JSON.stringify(clicks));
 
   if (failed) { console.error(`\n${failed} check(s) failed`); process.exit(1); }
   console.log('\nneu-consent: all checks passed');

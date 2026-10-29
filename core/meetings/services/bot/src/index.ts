@@ -293,7 +293,8 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
         // neu-meet patch: tell everyone the call is recorded, once admitted; runs beside capture, never fails it
         const notice = consentMessage(inv, env);
         if (notice) void postMeetChat(sess.page, notice);
-        const stopTips = inv.platform === 'google_meet' ? dismissMeetPopups(sess.page) : () => {};
+        const stopTips = inv.platform === 'google_meet'
+          ? dismissMeetPopups(sess.page, undefined, logoBrowserArgs(inv, env).length > 0) : () => {};
         // stopped with capture, so nothing is clicked while the bot leaves
         return startCaptureBridge(sess.page, inv, bp, signalRecorder?.sink, publishChat, remoteAudioActivity)
           .then((stop) => async () => { stopTips(); await stop(); }, (e) => { stopTips(); throw e; });
