@@ -87,7 +87,8 @@ export function meetCamera(click: boolean): 'on' | 'off' | 'locked' | 'none' {
  *  after this many presses in a row that don't take, it only tries again every retryMs. */
 const CAMERA_TURN_ONS = 3;
 
-/** Every 15 s for the whole call, closes the two Meet tips the camera brings up on the bot's screen, which is
+/** Every 15 s for the whole call, closes (or with closeTips off, only logs) the two Meet tips the camera brings
+ *  up on the bot's screen, which is
  *  what the video records: "Others may see your video differently" and "Camera might be blocked" (the dark
  *  logo frame looks covered to Meet). Only those: a Close elsewhere can mean "no" (a recording consent notice,
  *  a breakout-room move). With keepCameraOn, also turns the bot's camera (the logo) back on when it finds it
@@ -127,14 +128,15 @@ export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = f
     if (stopped) return;
     const tips = page.locator('[role="dialog"], [role="alertdialog"], [role="alert"], [role="status"]')
       .filter({ hasText: /see your video differently|camera might be blocked/i });
-    // visible ones only, each on its own: one that can't be clicked mustn't block the rest every sweep
     if (!closeTips) {
       for (const text of await tips.allInnerTexts().catch(() => [] as string[])) {
-        const t = text.replace(/\s+/g, ' ').trim().slice(0, 160);
+        // only the tip's own words: a shared live region could also hold names or chat
+        const t = text.match(/see your video differently|camera might be blocked/i)?.[0] ?? '';
         if (t && !seenTips.has(t)) { seenTips.add(t); console.log(`[bot] Meet camera tip shown (left open): ${t}`); }
       }
       return;
     }
+    // visible ones only, each on its own: one that can't be clicked mustn't block the rest every sweep
     const buttons = await tips.getByRole('button', { name: /^(got it|dismiss|close)$/i }).filter({ visible: true }).all();
     for (const b of buttons.slice(0, 5)) {
       if (stopped) return;

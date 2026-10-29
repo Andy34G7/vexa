@@ -48,7 +48,7 @@ setPage([]); check('page: no tiles -> unknown', presence().startsWith('unknown')
 setPage([{ ...BOT, name: undefined }, ANA]); check('page: bot tile not found -> unknown', presence().startsWith('unknown'));
 setPage([{ id: 'b', label: 'x', self: true }]); check("page: Meet's self marker works too", presence() === 'alone');
 setPage([BOT]); check('page: no bot name given -> unknown', meetPresence('').startsWith('unknown'));
-setPage([BOT, { id: 'b2', name: NAME }]); check('page: two bots of the same name -> others (neither leaves early)', presence() === 'others');
+setPage([BOT, { id: 'b2', name: NAME }]); check('page: two tiles with the bot name -> unknown (never leaves early)', presence().startsWith('unknown'));
 setPage([BOT], 'Breakout rooms are open'); check('page: breakout rooms -> unknown', presence().startsWith('unknown'));
 
 /** The monitor over a page whose presence the test sets; heardAt is the last remote audio. */

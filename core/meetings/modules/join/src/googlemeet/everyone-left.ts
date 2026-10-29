@@ -22,8 +22,11 @@ export function meetPresence(botName: string): MeetPresence {
   // other one's tile may be taken for ours, then ours counts as someone else, so neither leaves early.
   const tiles = Array.from(document.querySelectorAll("[data-participant-id]"));
   // any of its name spans (seen live: the tile holds three, the bot's name in the second)
-  const named = tiles.find((el) => !!botName && Array.from(el.querySelectorAll("span.notranslate"))
+  const namedAll = tiles.filter((el) => !!botName && Array.from(el.querySelectorAll("span.notranslate"))
     .some((s) => s.textContent?.trim() === botName));
+  // two tiles named as the bot (someone with its name, or a second bot): can't tell which is ours
+  if (namedAll.length > 1 && !document.querySelector("[data-self-name]")) return "unknown: more than one tile has the bot's name";
+  const named = namedAll[0];
   const self = (document.querySelector("[data-self-name]")?.closest("[data-participant-id]") || named)
     ?.getAttribute("data-participant-id");
   if (!self) return "unknown: the bot's own tile isn't found";
