@@ -7,7 +7,7 @@ import { log } from "../_host";
 // page and nobody is heard, everyone has left. A wrong leave can't be undone (the meeting counts as served),
 // so anything unclear is "don't know", and the silence rule stays as the backstop.
 // ponytail: reads Meet's tiles; if Meet stops rendering them the check never fires (fails safe).
-export const EVERYONE_LEFT_MS = 2 * 60 * 1000;
+export const EVERYONE_LEFT_MS = 60 * 1000;
 
 /** "unknown: <why>" is never alone. */
 export type MeetPresence = "alone" | "others" | `unknown: ${string}`;
