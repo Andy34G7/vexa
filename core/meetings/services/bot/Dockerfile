@@ -156,7 +156,8 @@ COPY --from=builder /build /app
 # page navigation (the gmeet per-channel + mixed-lane capture wiring depends on it).
 COPY --from=builder /build/core/meetings/services/bot/dist/browser-utils.global.js /app/browser-utils.global.js
 
-# neu-meet patch: Neu Notetaker's camera frame (logo on black) and the silence its fake mic plays, plus
+# neu-meet patch: Neu Notetaker's camera frame (the logo in a black circle on Meet's grey; all-black looked like a
+# covered lens to Meet, whose "Camera might be blocked" tip, when closed, turned the camera off) and the silence its fake mic plays, plus
 # the consent notice it posts in the Meet chat (see src/neu-consent.ts). Empty either ENV to turn it off.
 COPY core/meetings/services/bot/assets/neu-logo.png /app/neu-logo.png
 RUN ffmpeg -v error -i /app/neu-logo.png -pix_fmt yuv420p -r 5 -frames:v 1 -f yuv4mpegpipe /app/neu-logo.y4m \
