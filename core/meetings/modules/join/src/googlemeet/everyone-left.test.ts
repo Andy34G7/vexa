@@ -3,7 +3,7 @@
  * a fabricated DOM; no browser. Run: npx tsx src/googlemeet/everyone-left.test.ts
  */
 
-import { meetPresence, startGoogleEveryoneLeftMonitor } from './everyone-left';
+import { meetPresence, meetTilesDebug, startGoogleEveryoneLeftMonitor } from './everyone-left';
 
 let failed = 0;
 const check = (name: string, cond: boolean) => {
@@ -50,6 +50,10 @@ setPage([{ id: 'b', label: 'x', self: true }]); check("page: Meet's self marker 
 setPage([BOT]); check('page: no bot name given -> unknown', meetPresence('').startsWith('unknown'));
 setPage([BOT, { id: 'b2', name: NAME }]); check('page: two tiles with the bot name -> unknown (never leaves early)', presence().startsWith('unknown'));
 setPage([BOT], 'Breakout rooms are open'); check('page: breakout rooms -> unknown', presence().startsWith('unknown'));
+setPage([BOT, { id: 'a', label: 'Ana Real', name: 'Ana Real' }]);
+const dump = meetTilesDebug(NAME);
+check("tile log: no participant's name, only which tile is the bot's", !dump.includes('Ana')
+  && JSON.parse(dump).tiles.map((t: { named: boolean }) => t.named).join() === 'true,false');
 
 /** The monitor over a page whose presence the test sets; heardAt is the last remote audio. */
 async function run(states: string[], stepMs: number, heardAt?: () => number | undefined) {
