@@ -87,15 +87,15 @@ export function meetCamera(click: boolean): 'on' | 'off' | 'locked' | 'none' {
  *  after this many presses in a row that don't take, it only tries again every retryMs. */
 const CAMERA_TURN_ONS = 3;
 
-/** Every 15 s for the whole call, closes (or with closeTips off, only logs) the two Meet tips the camera brings
- *  up on the bot's screen, which is
+/** Every 15 s for the whole call, closes the two Meet tips the camera brings up on the bot's screen (with
+ *  closeTips off, "Camera might be blocked" is only logged: closing it turned the camera off, seen live), which is
  *  what the video records: "Others may see your video differently" and "Camera might be blocked" (the dark
  *  logo frame looks covered to Meet). Only those: a Close elsewhere can mean "no" (a recording consent notice,
  *  a breakout-room move). With keepCameraOn, also turns the bot's camera (the logo) back on when it finds it
  *  off. Returns a stop function. Never throws. */
 export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false, settleMs = 2_000,
   retryMs = 5 * 60_000, closeTips = true): () => void {
-  const seenTips = new Set<string>();  // with closeTips off: each tip logged once, not clicked
+  const seenTips = new Set<string>();  // with closeTips off: the blocked tip logged once, not clicked
   let stopped = false;  // a sweep under way when the bot leaves clicks nothing more
   let busy = false;     // a slow sweep isn't overlapped by the next (two presses would turn it back off)
   let camera = '';      // last camera state seen, logged on change (how Meet behaves, e.g. on a host's video lock)
@@ -126,16 +126,18 @@ export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = f
       }
     }
     if (stopped) return;
-    const tips = page.locator('[role="dialog"], [role="alertdialog"], [role="alert"], [role="status"]')
-      .filter({ hasText: /see your video differently|camera might be blocked/i });
+    const roles = '[role="dialog"], [role="alertdialog"], [role="alert"], [role="status"]';
     if (!closeTips) {
-      for (const text of await tips.allInnerTexts().catch(() => [] as string[])) {
+      const blocked = page.locator(roles).filter({ hasText: /camera might be blocked/i });
+      for (const text of await blocked.allInnerTexts().catch(() => [] as string[])) {
         // only the tip's own words: a shared live region could also hold names or chat
-        const t = text.match(/see your video differently|camera might be blocked/i)?.[0] ?? '';
+        const t = text.match(/camera might be blocked/i)?.[0] ?? '';
         if (t && !seenTips.has(t)) { seenTips.add(t); console.log(`[bot] Meet camera tip shown (left open): ${t}`); }
       }
-      return;
     }
+    // "Others may see your video differently" (its Got it is harmless) always; the blocked tip only with closeTips
+    const tips = page.locator(roles)
+      .filter({ hasText: closeTips ? /see your video differently|camera might be blocked/i : /see your video differently/i });
     // visible ones only, each on its own: one that can't be clicked mustn't block the rest every sweep
     const buttons = await tips.getByRole('button', { name: /^(got it|dismiss|close)$/i }).filter({ visible: true }).all();
     for (const b of buttons.slice(0, 5)) {

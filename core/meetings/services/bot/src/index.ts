@@ -294,7 +294,7 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
         const notice = consentMessage(inv, env);
         if (notice) void postMeetChat(sess.page, notice);
         const stopTips = inv.platform === 'google_meet'
-          // tips left open for now: seen live, each tip closed was followed by the camera (the logo) going off
+          // the "Camera might be blocked" tip is left open: seen live, closing it turned the camera (the logo) off
           ? dismissMeetPopups(sess.page, undefined, logoBrowserArgs(inv, env).length > 0, undefined, undefined, /* closeTips */ false) : () => {};
         // stopped with capture, so nothing is clicked while the bot leaves
         return startCaptureBridge(sess.page, inv, bp, signalRecorder?.sink, publishChat, remoteAudioActivity)
