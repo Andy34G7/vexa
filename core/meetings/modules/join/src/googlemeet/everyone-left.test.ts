@@ -73,6 +73,13 @@ async function run(states: string[], stepMs: number, heardAt?: () => number | un
   check('no audio reading (capture down): no leave', !(await run(['others', 'alone'], 200, () => undefined)));
   check('heard long ago: leaves', await run(['others', 'alone'], 200, () => Date.now() - 10_000));
   check('stopped before the window ends: no leave', !(await run(['others', 'alone'], 30)));
+  const lines: string[] = [];
+  const origLog = console.log;
+  console.log = (m: string) => { lines.push(String(m)); };
+  await run(['alone', 'others'], 30);
+  console.log = origLog;
+  check('log: "nobody else seen yet" only before someone was seen', lines.some((l) => l.includes('alone (nobody else seen yet)'))
+    && lines.some((l) => l.includes('everyone-left: others')) && !lines.some((l) => l.includes('others (nobody else seen yet)')));
   if (failed) { console.error(`\n${failed} check(s) failed`); process.exit(1); }
   console.log('\ngooglemeet everyone-left: all checks passed');
 })();

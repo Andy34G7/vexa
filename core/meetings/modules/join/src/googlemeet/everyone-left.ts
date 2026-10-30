@@ -80,13 +80,13 @@ export function startGoogleEveryoneLeftMonitor(
     try { state = await page.evaluate(meetPresence, opts.botName ?? ""); } catch { /* page closing: don't know */ }
     busy = false;
     if (done) return;
+    if (state === "others") seenOther = true;  // before the log line, which would call this one "nobody else seen yet"
     if (state !== last) log(`everyone-left: ${state}${seenOther ? "" : " (nobody else seen yet)"}`);
     last = state;
     if (state.startsWith("unknown") && Date.now() - dumpedAt > 60_000) {  // ponytail: diagnostic, drop once the DOM is known
       dumpedAt = Date.now();
       try { log(`everyone-left tiles: ${await page.evaluate(meetTilesDebug)}`); } catch { /* page closing */ }
     }
-    if (state === "others") seenOther = true;
     if (state !== "alone" || !seenOther) { since = null; return; }
     const now = Date.now();
     since ??= now;
