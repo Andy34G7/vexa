@@ -310,11 +310,10 @@ export async function main(env: NodeJS.ProcessEnv = process.env): Promise<number
         return async () => {
           await stopAudio();
           await video.stop();                                                                // SIGTERM → webm finalized
-          if (inv.recordingUploadUrl) {
-            await video.upload(inv.recordingUploadUrl, inv.internalSecret ?? '')
-              .catch((e) => console.error(`[bot] video upload failed: ${serr(e)}`));
-          }
-          await video.cleanup();
+          // a failed upload keeps the file (the only copy) in the exited container, for `docker cp`
+          const uploaded = !inv.recordingUploadUrl || await video.upload(inv.recordingUploadUrl, inv.internalSecret ?? '')
+            .then(() => true, (e) => { console.error(`[bot] video upload failed, kept ${video.getFilePath()}: ${serr(e)}`); return false; });
+          if (uploaded) await video.cleanup();
         };
       } : undefined,
       engine: bp,

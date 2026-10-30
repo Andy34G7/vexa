@@ -116,7 +116,8 @@ export class VideoRecordingService {
    * Upload the video file to the meeting-api upload endpoint.
    * Sends media_type: "video" so meeting-api stores it as a video MediaFile.
    */
-  async upload(callbackUrl: string, token: string): Promise<void> {
+  // neu-meet patch: idleMs bounds a stalled upload (it runs while the bot is still in the call)
+  async upload(callbackUrl: string, token: string, idleMs = 120_000): Promise<void> {
     if (!fs.existsSync(this.filePath)) {
       log(`[VideoRecording] File not found for upload: ${this.filePath}`);
       return;
@@ -189,6 +190,7 @@ export class VideoRecordingService {
         log(`[VideoRecording] Upload error: ${err.message}`);
         reject(err);
       });
+      req.setTimeout(idleMs, () => req.destroy(new Error(`video upload stalled for ${idleMs} ms`)));
       req.write(body);
       req.end();
     });
