@@ -133,26 +133,46 @@ void (async () => {
   await new Promise((r) => setTimeout(r, 40));
   check('camera: nothing pressed after stop', c.st.presses === before, JSON.stringify(c.st));
 
-  // closeTips off: "see your video differently" is still closed; "camera might be blocked" is logged once, never clicked
-  const tipClicks: string[] = [];
-  const logged: string[] = [];
-  const origLog = console.log;
-  console.log = (m: string) => { logged.push(m); };
-  const which = (re: RegExp) => (re.test('Camera might be blocked') && !re.test('see your video differently') ? 'blocked' : 'differently');
-  const quiet = {
-    locator: () => ({ filter: ({ hasText }: { hasText: RegExp }) => ({
-      allInnerTexts: async () => (which(hasText) === 'blocked' ? ['Ana joined. Camera might be blocked Check your privacy switch'] : []),
-      getByRole: () => ({ filter: () => ({ all: async () => [{ click: async () => { tipClicks.push(which(hasText)); } }] }) }),
-    }) }),
-  } as unknown as Page;
-  const stopQuiet = dismissMeetPopups(quiet, 10, false, 0, undefined, false);
-  await new Promise((r) => setTimeout(r, 50));
-  stopQuiet();
-  console.log = origLog;
-  const tipLines = logged.filter((m) => m.includes('camera tip shown'));
-  check('tips off: the blocked tip is never clicked', !tipClicks.includes('blocked'), JSON.stringify(tipClicks));
-  check('tips off: "see your video differently" is still closed', tipClicks.includes('differently'), JSON.stringify(tipClicks));
-  check('tips off: the blocked tip logged once, only its words', tipLines.length === 1 && tipLines[0].endsWith('Camera might be blocked'), JSON.stringify(tipLines));
+  // closeTips off: "see your video differently" is still closed, never a container holding the blocked tip; the
+  // blocked tip is logged once, never clicked. Containers: what each one's text holds.
+  const runTips = async (containers: string[][], camOffAfterClose = false) => {
+    const clicks: string[] = [];
+    const lines: string[] = [];
+    const cam = { state: 'on' };
+    const origLog = console.log;
+    console.log = (m: string) => { lines.push(m); };
+    type Sel = { has?: RegExp; hasNot?: RegExp };
+    const pick = (sel: Sel) => containers.filter((c) => (!sel.has || c.some((t) => sel.has!.test(t)))
+      && (!sel.hasNot || !c.some((t) => sel.hasNot!.test(t))));
+    const loc = (sel: Sel): unknown => ({
+      filter: (f: { hasText?: RegExp; hasNotText?: RegExp }) => loc({ has: f.hasText ?? sel.has, hasNot: f.hasNotText ?? sel.hasNot }),
+      allInnerTexts: async () => pick(sel).map((c) => c.join(' ')),
+      getByRole: () => ({ filter: () => ({ all: async () => pick(sel).flatMap((c) => c.map((t) => ({
+        click: async () => { clicks.push(t); if (camOffAfterClose) cam.state = 'off'; },
+      }))) }) }),
+    });
+    const page = {
+      locator: () => loc({}),
+      evaluate: async (_fn: unknown, click: boolean) => { if (click && cam.state === 'off') cam.state = 'on'; return cam.state; },
+      waitForTimeout: async () => {},
+    } as unknown as Page;
+    const stop = dismissMeetPopups(page, 10, camOffAfterClose, 0, undefined, false);
+    await new Promise((r) => setTimeout(r, 80));
+    stop();
+    console.log = origLog;
+    return { clicks, lines };
+  };
+  const SEE = 'Others may see your video differently', BLOCKED = 'Camera might be blocked';
+  let r = await runTips([[SEE], [BLOCKED]]);
+  check('tips off: the see-differently tip is closed', r.clicks.includes(SEE), JSON.stringify(r.clicks));
+  check('tips off: the blocked tip is never clicked', !r.clicks.includes(BLOCKED), JSON.stringify(r.clicks));
+  check('tips off: the blocked tip logged once, only its words',
+    r.lines.filter((m) => m.includes('camera tip shown')).length === 1, JSON.stringify(r.lines));
+  r = await runTips([[SEE, BLOCKED]]);
+  check('tips off: a container holding both tips is left alone', r.clicks.length === 0, JSON.stringify(r.clicks));
+  r = await runTips([[SEE]], true);
+  check('tips off: camera going off right after a close stops the closing', r.clicks.length === 1
+    && r.lines.some((m) => m.includes('leaving the tips open')), JSON.stringify(r));
 
   if (failed) { console.error(`\n${failed} check(s) failed`); process.exit(1); }
   console.log('\nneu-consent: all checks passed');
