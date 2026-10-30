@@ -21,7 +21,8 @@
  */
 
 import { joinGoogleMeeting, isGoogleSignedOutLobby, AuthSessionError } from './join';
-import { googleAuthJoinCtaSelectors, googleSignedOutLobbyProbeSelectors } from './selectors';
+import { googleAuthJoinCtaSelectors, googleSignedOutLobbyProbeSelectors, googleCantJoinSelectors, googleNameInputSelectors, googleJoinButtonSelectors } from './selectors';
+import { AdmissionError } from '../shared/admission';
 
 // Structural (locale-agnostic) vs English-literal selector split, derived from
 // the exported arrays so the fixtures track the shipped selectors.
@@ -37,21 +38,23 @@ const PROBE_ENGLISH = googleSignedOutLobbyProbeSelectors.filter(isEnglishLiteral
  * that resolve on this page; every click on a resolved handle is recorded in
  * `clicks` (keyed by the selector that produced the handle).
  */
-function mockPage(visible: string[]) {
+function mockPage(visible: string[], url = 'https://meet.google.com/abc-defg-hij') {
   const clicks: string[] = [];
+  const fills: string[] = [];
   const handle = (sel: string) => ({
     click: async () => { clicks.push(sel); },
     isVisible: async () => true,
   });
   const page: any = {
     clicks,
+    fills,
     goto: async () => {},
     bringToFront: async () => {},
     screenshot: async () => {},
     waitForTimeout: async () => {},
-    fill: async () => {},
+    fill: async (_sel: string, text: string) => { fills.push(text); },
     mouse: { move: async () => {} },
-    url: () => 'https://meet.google.com/abc-defg-hij',
+    url: () => url,
     // The lobby-CTA resolvers read the observed locale for the failure
     // diagnostic and run the structural scan through evaluateHandle; neither
     // resolves anything on this fixture, which is driven purely by `visible`.
@@ -153,6 +156,28 @@ function check(name: string, ok: boolean, detail = '') {
   check('structural name input alone → signed-out', await isGoogleSignedOutLobby(mockPage(PROBE_STRUCTURAL)));
   check('English name input alone → signed-out', await isGoogleSignedOutLobby(mockPage(PROBE_ENGLISH)));
   check('no name input → NOT signed-out', !(await isGoogleSignedOutLobby(mockPage(CTA_STRUCTURAL))));
+
+  // neu-meet patch: a guest Meet refuses (a 403 at join) ends the name-input wait with that reason, and the bot
+  // never types its name into Meet's home page (seen live: its meeting-code box passed for the name field)
+  console.log('\n=== neu-meet: guest join refused by Meet ===');
+  {
+    const guest = { platform: 'google_meet', authenticated: false, uiInteractionMode: 'synthetic' } as any;
+    const lobby = 'https://meet.google.com/meet/abc-defg-hij?hl=en';
+    const guestJoin = (page: any) => joinGoogleMeeting(page, 'https://meet.google.com/abc-defg-hij', 'Vexa Bot', guest)
+      .then(() => null, (e: unknown) => e);
+    let page = mockPage([googleCantJoinSelectors[0]], lobby);
+    let err = await guestJoin(page);
+    check("\"can't join this video call\" page → AdmissionError(join_failure), name not typed",
+      err instanceof AdmissionError && err.outcome === 'join_failure' && page.fills.length === 0, String(err));
+    page = mockPage([googleNameInputSelectors[1]], 'https://meet.google.com/landing?hl=en');
+    err = await guestJoin(page);
+    check("Meet's home page (no meeting code) → AdmissionError(join_failure), name not typed",
+      err instanceof AdmissionError && err.outcome === 'join_failure' && page.fills.length === 0, String(err));
+    page = mockPage([googleNameInputSelectors[0], googleJoinButtonSelectors[0]], lobby);
+    err = await guestJoin(page);
+    check('the guest lobby → name typed, asked to join', err === null && page.fills[0] === 'Vexa Bot'
+      && page.clicks.includes(googleJoinButtonSelectors[0]), String(err));
+  }
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
