@@ -81,6 +81,17 @@ void (async () => {
   check("tips: a stuck button doesn't block the next one", n >= 2 && clicks.every((c) => c === 'got it'), JSON.stringify(clicks));
   check('tips: no clicks after stop', clicks.length === n, `${n} -> ${clicks.length}`);
   check('camera: not even read unless the logo is on', !clicks.includes('camera?'));
+  // the early sweep: a tip is closed at firstMs, long before the first interval tick; stop cancels it
+  clicks.length = 0;
+  let stopEarly = dismissMeetPopups(tipsPage, 10_000, false, 0, undefined, true, 10);
+  await new Promise((r) => setTimeout(r, 50));
+  stopEarly();
+  check('tips: an early sweep at firstMs, before the first 15 s tick', clicks.includes('got it'), JSON.stringify(clicks));
+  clicks.length = 0;
+  stopEarly = dismissMeetPopups(tipsPage, 10_000, false, 0, undefined, true, 30);
+  stopEarly();
+  await new Promise((r) => setTimeout(r, 60));
+  check('tips: stopped before firstMs, no early sweep', clicks.length === 0, JSON.stringify(clicks));
 
   // the camera: a page whose button the test drives; evaluate(meetCamera, click) answers like the real one
   // takes: a press turns it on; slow: it shows "on" only from the read after next (past the settle)
