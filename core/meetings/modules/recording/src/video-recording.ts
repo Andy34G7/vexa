@@ -340,6 +340,10 @@ export class VideoRecordingService {
             '-deadline', 'realtime',
             '-cpu-used', '8',
             '-row-mt', '1',
+            // neu-meet patch: 2 threads (libvpx takes every core by default, 8 on the VM) and no lookahead, which
+            // a realtime encode doesn't use: measured ~90 MB less RSS per bot, same file size, still ~18x realtime
+            '-threads', '2',
+            '-lag-in-frames', '0',
           ];
         }
         outputFile = this.filePath; // .webm or .mp4
