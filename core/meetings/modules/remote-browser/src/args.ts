@@ -30,6 +30,8 @@ export const CDP_DEBUG_ARGS = [
 export function getAuthenticatedBrowserArgs(): string[] {
   return [
     '--no-sandbox',
+    // neu-meet patch: this flag's infobar is inside the video crop's 120 px (recording/src/video-recording.ts):
+    // dropping it moves the page up, so change that crop in the same commit
     '--disable-setuid-sandbox',
     '--disable-blink-features=AutomationControlled',
     '--disable-infobars',

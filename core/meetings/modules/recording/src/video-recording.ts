@@ -331,7 +331,10 @@ export class VideoRecordingService {
           encoderArgs = [
             // neu-meet patch: crop off Chromium's tab/address/infobar rows (top 120 px) and the desktop
             // taskbar (bottom 24 px), so only the Meet page is recorded; then 1280 wide, which roughly
-            // halves the encode cost and the file size
+            // halves the encode cost and the file size. The 120 px include the ~40 px "unsupported command-line
+            // flag: --disable-setuid-sandbox" infobar (the page starts at y=118: humanized input's calibrated offset
+            // in every staging run), so a change that drops that flag (join browser-args.ts, remote-browser args.ts)
+            // must lower this crop too, or every recording loses the top of the Meet page
             '-vf', 'crop=iw:ih-144:0:120,scale=1280:-2',
             '-c:v', 'libvpx-vp9',
             '-pix_fmt', 'yuv420p', // VP9 profile 0 — required for Safari compatibility

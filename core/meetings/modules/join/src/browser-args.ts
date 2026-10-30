@@ -47,6 +47,8 @@ export function getLocaleBrowserArgs(): string[] {
 export const JOIN_BROWSER_ARGS: readonly string[] = [
   "--incognito",
   "--no-sandbox",
+  // neu-meet patch: this flag's infobar is inside the video crop's 120 px (recording/src/video-recording.ts):
+  // dropping it moves the page up, so change that crop in the same commit
   "--disable-setuid-sandbox",
   "--disable-features=IsolateOrigins,site-per-process",
   "--disable-infobars",
