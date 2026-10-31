@@ -169,6 +169,11 @@ function check(name: string, ok: boolean, detail = '') {
     let err = await guestJoin(page);
     check("\"can't join this video call\" page → AdmissionError(join_failure), name not typed",
       err instanceof AdmissionError && err.outcome === 'join_failure' && page.fills.length === 0, String(err));
+    const [, source, flags] = googleCantJoinSelectors[0].match(/^text=\/(.*)\/(\w*)$/)!;
+    const refusal = new RegExp(source, flags);
+    check("the refusal selector matches both of Meet's wordings",
+      ["You can't join this video call", 'You can’t join this call'].every((t) => refusal.test(t))
+      && !refusal.test('Ready to join?'));
     page = mockPage([googleNameInputSelectors[1]], 'https://meet.google.com/landing?hl=en');
     err = await guestJoin(page);
     check("Meet's home page (no meeting code) → AdmissionError(join_failure), name not typed",

@@ -342,8 +342,9 @@ export const googleMicrophoneButtonSelectors: string[] = [
 // match by structure/role; keep the English aria-label + placeholder as
 // fallbacks.
 // neu-meet patch: the page Meet shows when it refuses a guest outright (a 403 at join, seen live). About 60 s later it
-// moves on to Meet's home page, whose meeting-code box the name-input wait took for the name field.
-export const googleCantJoinSelectors: string[] = ['text=/can.t join this video call/i'];
+// moves on to Meet's home page, whose meeting-code box the name-input wait took for the name field. Meet words it
+// "You can't join this video call" or "You can't join this call".
+export const googleCantJoinSelectors: string[] = ['text=/can.t join this (video )?call/i'];
 
 export const googleNameInputSelectors: string[] = [
   // Locale-agnostic: the single text input in the pre-join lobby form.
