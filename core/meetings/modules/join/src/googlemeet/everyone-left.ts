@@ -56,10 +56,15 @@ export function meetTilesDebug(botName: string): string {
       nested: el.querySelectorAll("[data-participant-id]").length,
     };
   });
-  // Meet's own control labels (e.g. "Chat with everyone"), for a future People-count check
-  const labels = Array.from(document.querySelectorAll("[aria-label]")).map((e) => e.getAttribute("aria-label") || "")
-    .filter((l) => /people|participant|everyone|only one|you're the/i.test(l)).slice(0, 8).map((l) => l.slice(0, 60));
-  return JSON.stringify({ tiles, labels });
+  // Meet's own control labels (e.g. "Chat with everyone"), for a future People-count check. Only labels made of these
+  // words and digits are logged; any other, which may hold a participant's name (e.g. a host's "Mute X for everyone"),
+  // is only counted
+  const words = new Set(["show", "everyone", "people", "participant", "participants", "chat", "with", "you're", "the",
+    "only", "one", "here", "meeting"]);
+  const found = Array.from(document.querySelectorAll("[aria-label]")).map((e) => e.getAttribute("aria-label") || "")
+    .filter((l) => /people|participant|everyone|only one|you're the/i.test(l));
+  const labels = found.filter((l) => l.toLowerCase().replace(/’/g, "'").split(/[\s\d(),.:]+/).every((w) => !w || words.has(w)));
+  return JSON.stringify({ tiles, labels: labels.slice(0, 8).map((l) => l.slice(0, 60)), otherLabels: found.length - labels.length });
 }
 
 export function startGoogleEveryoneLeftMonitor(

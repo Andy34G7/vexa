@@ -54,6 +54,13 @@ setPage([BOT, { id: 'a', label: 'Ana Real', name: 'Ana Real' }]);
 const dump = meetTilesDebug(NAME);
 check("tile log: no participant's name, only which tile is the bot's", !dump.includes('Ana')
   && JSON.parse(dump).tiles.map((t: { named: boolean }) => t.named).join() === 'true,false');
+const doc = (globalThis as any).document, tilesOf = doc.querySelectorAll;
+doc.querySelectorAll = (sel: string) => (sel === '[aria-label]'
+  ? ['Chat with everyone', 'Show everyone (3)', 'Mute Ana Real for everyone', 'Мария: people'].map((l) => ({ getAttribute: () => l }))
+  : tilesOf(sel));
+const labelled = JSON.parse(meetTilesDebug(NAME));
+check("tile log: Meet's control labels kept, a label with a name only counted",
+  labelled.labels.join('|') === 'Chat with everyone|Show everyone (3)' && labelled.otherLabels === 2);
 
 /** The monitor over a page whose presence the test sets; heardAt is the last remote audio. */
 async function run(states: string[], stepMs: number, heardAt?: () => number | undefined) {
