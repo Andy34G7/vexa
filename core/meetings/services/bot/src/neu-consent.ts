@@ -87,14 +87,14 @@ export function meetCamera(click: boolean): 'on' | 'off' | 'locked' | 'none' {
  *  after this many presses in a row that don't take, it only tries again every retryMs. */
 const CAMERA_TURN_ONS = 3;
 
-/** Every 15 s for the whole call, closes the two Meet tips the camera brings up on the bot's screen (with
+/** Once at firstMs, then every 15 s for the whole call, closes the two Meet tips the camera brings up on the bot's screen (with
  *  closeTips off, "Camera might be blocked" is only logged: closing it turned the camera off, seen live), which is
  *  what the video records: "Others may see your video differently" and "Camera might be blocked" (the dark
  *  logo frame looks covered to Meet). Only those: a Close elsewhere can mean "no" (a recording consent notice,
  *  a breakout-room move). With keepCameraOn, also turns the bot's camera (the logo) back on when it finds it
  *  off. Returns a stop function. Never throws. */
 export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = false, settleMs = 2_000,
-  retryMs = 5 * 60_000, closeTips = true): () => void {
+  retryMs = 5 * 60_000, closeTips = true, firstMs = 8_000): () => void {
   const seenTips = new Set<string>();  // with closeTips off: the blocked tip logged once, not clicked
   let stopped = false;  // a sweep under way when the bot leaves clicks nothing more
   let busy = false;     // a slow sweep isn't overlapped by the next (two presses would turn it back off)
@@ -157,10 +157,14 @@ export function dismissMeetPopups(page: Page, everyMs = 15_000, keepCameraOn = f
       }).catch(() => {});
     }
   };
-  const timer = setInterval(() => {
+  const tick = () => {
     if (busy) return;
     busy = true;
     sweep().catch(() => {}).finally(() => { busy = false; });
-  }, everyMs);
-  return () => { stopped = true; clearInterval(timer); };
+  };
+  // an early sweep, inside the consent notice's first 10 s click: a tip up at admission (seen live: "see your video
+  // differently") has a scrim that takes that click, and the 15 s tick came too late for it
+  const first = setTimeout(tick, firstMs);
+  const timer = setInterval(tick, everyMs);
+  return () => { stopped = true; clearTimeout(first); clearInterval(timer); };
 }

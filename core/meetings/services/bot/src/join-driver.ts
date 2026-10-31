@@ -168,9 +168,9 @@ export function createBrowserJoinDriver(
     },
     onEveryoneLeft(cb) {
       if (platform !== 'google_meet') return () => {};
-      return startGoogleEveryoneLeftMonitor(page, cb, {
-        aloneMs: inv.automaticLeave?.everyoneLeftTimeout, lastHeardAt: lastRemoteAudioAt, botName: inv.botName,
-      });
+      // always its own EVERYONE_LEFT_MS: automaticLeave.everyoneLeftTimeout is the silence rule's window (index.ts),
+      // so tuning one would move the other
+      return startGoogleEveryoneLeftMonitor(page, cb, { lastHeardAt: lastRemoteAudioAt, botName: inv.botName });
     },
     async leave(reason) {
       if (platform === 'teams') { await leaveMicrosoftTeams(page, undefined, reason); return; }

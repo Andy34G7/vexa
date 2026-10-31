@@ -43,22 +43,28 @@ export function meetPresence(botName: string): MeetPresence {
   return others ? "others" : "alone";
 }
 
-/** Runs in the Meet page: what the participant tiles hold, for the log while the check can't tell (names
- *  shortened; ids cut to their tail). */
-export function meetTilesDebug(): string {
-  const tiles = Array.from(document.querySelectorAll("[data-participant-id]")).slice(0, 12).map((el) => ({
-    id: (el.getAttribute("data-participant-id") || "").slice(-10),
-    aria: (el.getAttribute("aria-label") || "").slice(0, 60),
-    names: Array.from(el.querySelectorAll("span.notranslate")).map((s) => (s.textContent || "").trim().slice(0, 30)).slice(0, 3),
-    marked: !!el.querySelector("[data-self-name]"),
-    nested: el.querySelectorAll("[data-participant-id]").length,
-    text: (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
-  }));
-  const labels = Array.from(document.querySelectorAll("[aria-label]")).map((e) => e.getAttribute("aria-label") || "")
-    .filter((l) => /people|participant|everyone|only one|you're the/i.test(l)).slice(0, 8).map((l) => l.slice(0, 60));
-  const selfNames = Array.from(document.querySelectorAll("[data-self-name]"))
-    .map((e) => (e.getAttribute("data-self-name") || "").slice(0, 30)).slice(0, 3);
-  return JSON.stringify({ tiles, labels, selfNames });
+/** Runs in the Meet page: the shape of the participant tiles, for the log while the check can't tell (ids cut to
+ *  their tail). No tile names or text, which are participants' names: only whether a tile holds the bot's name. */
+export function meetTilesDebug(botName: string): string {
+  const tiles = Array.from(document.querySelectorAll("[data-participant-id]")).slice(0, 12).map((el) => {
+    const spans = Array.from(el.querySelectorAll("span.notranslate"));
+    return {
+      id: (el.getAttribute("data-participant-id") || "").slice(-10),
+      named: !!botName && spans.some((s) => s.textContent?.trim() === botName),
+      spans: spans.length,
+      marked: !!el.querySelector("[data-self-name]"),
+      nested: el.querySelectorAll("[data-participant-id]").length,
+    };
+  });
+  // Meet's own control labels (e.g. "Chat with everyone"), for a future People-count check. Only labels made of these
+  // words and digits are logged; any other, which may hold a participant's name (e.g. a host's "Mute X for everyone"),
+  // is only counted
+  const words = new Set(["show", "everyone", "people", "participant", "participants", "chat", "with", "you're", "the",
+    "only", "one", "here", "meeting"]);
+  const found = Array.from(document.querySelectorAll("[aria-label]")).map((e) => e.getAttribute("aria-label") || "")
+    .filter((l) => /people|participant|everyone|only one|you're the/i.test(l));
+  const labels = found.filter((l) => l.toLowerCase().replace(/’/g, "'").split(/[\s\d(),.:]+/).every((w) => !w || words.has(w)));
+  return JSON.stringify({ tiles, labels: labels.slice(0, 8).map((l) => l.slice(0, 60)), otherLabels: found.length - labels.length });
 }
 
 export function startGoogleEveryoneLeftMonitor(
@@ -80,13 +86,13 @@ export function startGoogleEveryoneLeftMonitor(
     try { state = await page.evaluate(meetPresence, opts.botName ?? ""); } catch { /* page closing: don't know */ }
     busy = false;
     if (done) return;
+    if (state === "others") seenOther = true;  // before the log line, which would call this one "nobody else seen yet"
     if (state !== last) log(`everyone-left: ${state}${seenOther ? "" : " (nobody else seen yet)"}`);
     last = state;
     if (state.startsWith("unknown") && Date.now() - dumpedAt > 60_000) {  // ponytail: diagnostic, drop once the DOM is known
       dumpedAt = Date.now();
-      try { log(`everyone-left tiles: ${await page.evaluate(meetTilesDebug)}`); } catch { /* page closing */ }
+      try { log(`everyone-left tiles: ${await page.evaluate(meetTilesDebug, opts.botName ?? "")}`); } catch { /* page closing */ }
     }
-    if (state === "others") seenOther = true;
     if (state !== "alone" || !seenOther) { since = null; return; }
     const now = Date.now();
     since ??= now;

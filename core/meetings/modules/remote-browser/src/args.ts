@@ -30,6 +30,10 @@ export const CDP_DEBUG_ARGS = [
 export function getAuthenticatedBrowserArgs(): string[] {
   return [
     '--no-sandbox',
+    // neu-meet patch: the video crop's 120 px (recording/src/video-recording.ts) include Chromium's "unsupported
+    // command-line flag" infobar, shown for this flag and for --no-sandbox alike. Dropping only this flag keeps the
+    // bar (it then names --no-sandbox); only dropping both, or adding --test-type, moves the page up. Re-measure the
+    // page's offset before changing that crop
     '--disable-setuid-sandbox',
     '--disable-blink-features=AutomationControlled',
     '--disable-infobars',

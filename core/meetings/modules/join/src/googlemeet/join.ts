@@ -3,6 +3,7 @@ import { log, randomDelay, callJoiningCallback } from "../_host";
 import { BotConfig } from "../_host";
 import {
   googleNameInputSelectors,
+  googleCantJoinSelectors,
   googleJoinButtonSelectors,
   googleMicrophoneButtonSelectors,
   googleCameraButtonSelectors,
@@ -455,10 +456,16 @@ export async function joinGoogleMeeting(
 
     const { handle: nameHandle, selector: nameFieldSelector } = await waitForAnySelector(
       page,
-      googleNameInputSelectors,
+      [...googleCantJoinSelectors, ...googleNameInputSelectors],  // neu-meet patch: a refusal ends the wait too
       120000,
       "name input"
     );
+    // neu-meet patch: Meet refused the guest (its "can't join" page, or the home page it moves on to, which has no
+    // meeting code in its URL): fail now with that reason, not 60 s later as "join button not found"
+    const code = navUrl.match(/\b[a-z]{3}-[a-z]{4}-[a-z]{3}\b/)?.[0];
+    if (googleCantJoinSelectors.includes(nameFieldSelector) || (code && !page.url().includes(code))) {
+      throw new AdmissionError("join_failure", `Meet refused the join (can't join this video call): ${page.url()}`);
+    }
     log("Name input field found.");
 
     await page.screenshot({ path: '/app/storage/screenshots/bot-checkpoint-0-name-field-found.png', fullPage: true });

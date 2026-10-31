@@ -116,7 +116,10 @@ export class VideoRecordingService {
    * Upload the video file to the meeting-api upload endpoint.
    * Sends media_type: "video" so meeting-api stores it as a video MediaFile.
    */
-  async upload(callbackUrl: string, token: string): Promise<void> {
+  // neu-meet patch: idleMs bounds a stalled upload (it runs while the bot is still in the call). It also runs while
+  // meeting-api works on its reply after the whole body is sent, so a slower reply reads as a failed upload (the bot
+  // keeps a copy the server may also store): raise it if meeting-api ever writes to remote storage inside the request
+  async upload(callbackUrl: string, token: string, idleMs = 120_000): Promise<void> {
     if (!fs.existsSync(this.filePath)) {
       log(`[VideoRecording] File not found for upload: ${this.filePath}`);
       return;
@@ -189,6 +192,7 @@ export class VideoRecordingService {
         log(`[VideoRecording] Upload error: ${err.message}`);
         reject(err);
       });
+      req.setTimeout(idleMs, () => req.destroy(new Error(`video upload stalled for ${idleMs} ms`)));
       req.write(body);
       req.end();
     });
@@ -329,7 +333,12 @@ export class VideoRecordingService {
           encoderArgs = [
             // neu-meet patch: crop off Chromium's tab/address/infobar rows (top 120 px) and the desktop
             // taskbar (bottom 24 px), so only the Meet page is recorded; then 1280 wide, which roughly
-            // halves the encode cost and the file size
+            // halves the encode cost and the file size. The 120 px include the ~40 px "unsupported command-line
+            // flag: --disable-setuid-sandbox" infobar (the page starts at y=118: humanized input's calibrated offset
+            // in every staging run). Chromium shows that bar for any such flag, and --no-sandbox is one too: the bar
+            // stays while either flag is passed (join browser-args.ts, remote-browser args.ts). Only when both are
+            // gone (or --test-type is added) and the bar is confirmed gone, re-measure the offset and lower this crop;
+            // lowering it with the bar still up records the bar
             '-vf', 'crop=iw:ih-144:0:120,scale=1280:-2',
             '-c:v', 'libvpx-vp9',
             '-pix_fmt', 'yuv420p', // VP9 profile 0 — required for Safari compatibility
@@ -338,6 +347,10 @@ export class VideoRecordingService {
             '-deadline', 'realtime',
             '-cpu-used', '8',
             '-row-mt', '1',
+            // neu-meet patch: 2 threads (libvpx takes every core by default, 8 on the VM) and no lookahead, which
+            // a realtime encode doesn't use: measured ~90 MB less RSS per bot, same file size, still ~18x realtime
+            '-threads', '2',
+            '-lag-in-frames', '0',
           ];
         }
         outputFile = this.filePath; // .webm or .mp4
