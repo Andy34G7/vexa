@@ -333,8 +333,10 @@ export class VideoRecordingService {
             // taskbar (bottom 24 px), so only the Meet page is recorded; then 1280 wide, which roughly
             // halves the encode cost and the file size. The 120 px include the ~40 px "unsupported command-line
             // flag: --disable-setuid-sandbox" infobar (the page starts at y=118: humanized input's calibrated offset
-            // in every staging run), so a change that drops that flag (join browser-args.ts, remote-browser args.ts)
-            // must lower this crop too, or every recording loses the top of the Meet page
+            // in every staging run). Chromium shows that bar for any such flag, and --no-sandbox is one too: the bar
+            // stays while either flag is passed (join browser-args.ts, remote-browser args.ts). Only when both are
+            // gone (or --test-type is added) and the bar is confirmed gone, re-measure the offset and lower this crop;
+            // lowering it with the bar still up records the bar
             '-vf', 'crop=iw:ih-144:0:120,scale=1280:-2',
             '-c:v', 'libvpx-vp9',
             '-pix_fmt', 'yuv420p', // VP9 profile 0 — required for Safari compatibility
